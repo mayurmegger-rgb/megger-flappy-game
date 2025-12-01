@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Megger Flappy Game (Audio Final)</title>
+    <style>
+        body {
+            margin: 0; padding: 0; display: flex; flex-direction: column; justify-content: center;
+            align-items: center; height: 100vh; background-color: #333; font-family: Arial, sans-serif; overflow: hidden;
+        }
+        canvas {
+            border: 2px solid #000; background-color: #70c5ce; box-shadow: 0 0 20px rgba(0,0,0,0.5); display: block;
+        }
+        #instructions {
+            color: white; font-size: 18px; margin-bottom: 10px; text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="instructions">Press <strong>SPACE</strong> or <strong>CLICK</strong> to Jump</div>
+    <canvas id="gameCanvas" width="320" height="480"></canvas>
+
+    <script>
+        window.onload = function() {
+            const canvas = document.getElementById("gameCanvas");
+            const ctx = canvas.getContext("2d");
+
+            // --- ROBUST SOUND MANAGER SETUP ---
+            let audioContext;
+            let audioUnlocked = false;
+
+            // Using the exact file names provided by the user
+            const hitSound = new Audio('hit.mp3.mp3'); // CRASH SOUND
+            const flapSound = new Audio('flap.mp3');   // JUMP SOUND (Requires 'flap.mp3' file)
+
+            function playSound(audioElement) {
+                if (audioContext && audioContext.state === 'suspended') {
+                    audioContext.resume().then(() => {
+                        audioElement.currentTime = 0;
+                        audioElement.play().catch(e => console.error("Sound play failed after resume:", e));
+                    });
+                } else if (audioUnlocked) {
+                    audioElement.currentTime = 0;
+                    audioElement.play().catch(e => console.error("Sound play failed:", e));
+                }
+            }
+
+            // Game Variables
+            let frames = 0; let score = 0; let gameState = "START"; 
+            
+            // The "Megger" Entity
+            const bird = {
+                x: 50, y: 150, velocity: 0, gravity: 0.25, jump: 4.6,
+                width: 90, height: 24, 
+                
+                draw: function() {
+                    ctx.fillStyle = "red"; ctx.font = "bold 24px Arial";
+                    ctx.textBaseline = "top"; ctx.fillText("Megger", this.x, this.y);
+                },
+                
+                update: function() {
+                    this.velocity += this.gravity; this.y += this.velocity;
+                    // Floor Collision
+                    if (this.y + this.height >= canvas.height - 20) {
+                        this.y = canvas.height - 20 - this.height; gameOver();
+                    }
+                    // Ceiling Collision
+                    if (this.y < 0) { this.y = 0; this.velocity = 0; }
+                },
+                
+                flap: function() { 
+                    this.velocity = -this.jump; 
+                    playSound(flapSound); 
+                },
+                
+                reset: function() { this.y = 150; this.velocity = 0; }
+            };
+
+            // Pipes (unchanged)
+            const pipes = {
+                items: [], width: 52, gap: 120, dx: 2,
+                draw: function() {
+                    for(let i = 0; i < this.items.length; i++){
+                        let p = this.items[i]; ctx.fillStyle = "#228B22";
+                        ctx.fillRect(p.x, 0, this.width, p.y);
+                        ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.strokeRect(p.x, 0, this.width, p.y);
+                        let bottomY = p.y + this.gap;
+                        ctx.fillRect(p.x, bottomY, this.width, canvas.height - bottomY);
+                        ctx.strokeRect(p.x, bottomY, this.width, canvas.height - bottomY);
+                    }
+                },
+                update: function() {
+                    if(frames % 120 === 0){
+                        this.items.push({ x: canvas.width, y: Math.floor(Math.random() * (canvas.height - 300)) + 50 });
+                    }
+                    for(let i = 0; i < this.items.length; i++){
+                        let p = this.items[i]; p.x -= this.dx;
+                        // Collision Logic
+                        if(bird.x < p.x + this.width && bird.x + bird.width > p.x) {
+                            if(bird.y < p.y || bird.y + bird.height > p.y + this.gap) { gameOver(); }
+                        }
+                        if(p.x + this.width <= 0 && !p.passed) { score++; p.passed = true; }
+                    }
+                    this.items = this.items.filter(p => p.x + this.width > 0);
+                },
+                reset: function() { this.items = []; }
+            };
+
+            // Main Draw/Loop Functions (unchanged)
+            function draw() {
+                ctx.fillStyle = "#70c5ce"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                pipes.draw();
+                ctx.fillStyle = "#ded895"; ctx.fillRect(0, canvas.height - 20, canvas.width, 20);
+                ctx.beginPath(); ctx.moveTo(0, canvas.height - 20); ctx.lineTo(canvas.width, canvas.height - 20);
+                ctx.strokeStyle = "#000"; ctx.stroke();
+                bird.draw();
+
+                if (gameState === "START") {
+                    ctx.fillStyle = "white"; ctx.font = "bold 25px Arial"; ctx.fillText("Click to Start", 80, 200);
+                } else if (gameState === "GAMEOVER") {
+                    ctx.fillStyle = "black"; ctx.font = "bold 30px Arial"; ctx.fillText("Game Over", 80, 180);
+                    ctx.fillStyle = "white"; ctx.font = "bold 20px Arial";
+                    ctx.fillText("Score: " + score, 115, 220); ctx.fillText("Click to Restart", 85, 260);
+                } else {
+                    ctx.fillStyle = "white"; ctx.strokeStyle = "black"; ctx.lineWidth = 1;
+                    ctx.font = "bold 35px Arial";
+                    ctx.fillText(score, 150, 50); ctx.strokeText(score, 150, 50);
+                }
+            }
+
+            function loop() {
+                if (gameState === "PLAYING") {
+                    bird.update(); pipes.update(); frames++;
+                }
+                draw(); requestAnimationFrame(loop);
+            }
+
+            function gameOver() {
+                if (gameState !== "GAMEOVER") {
+                    gameState = "GAMEOVER";
+                    playSound(hitSound); 
+                }
+            }
+
+            // --- INPUT HANDLING WITH AUDIO LOCK ---
+            function handleInput(e) {
+                if(e.type === 'keydown' && e.code === 'Space') { e.preventDefault(); }
+
+                // 1. First interaction to UNLOCK audio
+                if (!audioUnlocked) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    audioContext.resume().then(() => {
+                        audioUnlocked = true;
+                    }).catch(e => console.error("Audio unlock failed:", e));
+                }
+
+                // 2. Game Logic
+                if (gameState === "START") {
+                    gameState = "PLAYING"; bird.flap();
+                } else if (gameState === "PLAYING") {
+                    bird.flap();
+                } else if (gameState === "GAMEOVER") {
+                    bird.reset(); pipes.reset(); score = 0; frames = 0; gameState = "START";
+                }
+            }
+
+            // Listeners
+            window.addEventListener("keydown", function(e){ if(e.code === "Space") handleInput(e); });
+            window.addEventListener("mousedown", handleInput);
+            window.addEventListener("touchstart", function(e){ e.preventDefault(); handleInput(e); }, {passive: false});
+
+            loop();
+        };
+    </script>
+</body>
+</html>

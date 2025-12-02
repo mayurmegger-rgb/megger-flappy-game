@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Megger Flappy Game (Audio Final)</title>
+    <title>Megger Flappy Game (Leaderboard)</title>
     <style>
         body {
             margin: 0; padding: 0; display: flex; flex-direction: column; justify-content: center;
@@ -15,10 +15,19 @@
         #instructions {
             color: white; font-size: 18px; margin-bottom: 10px; text-align: center;
         }
+        /* Style for the High Score display above the canvas */
+        #highScoreDisplay {
+            color: #FFD700; /* Gold color */
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 5px;
+            text-shadow: 1px 1px 2px #000;
+        }
     </style>
 </head>
 <body>
 
+    <div id="highScoreDisplay">High Score: 0</div>
     <div id="instructions">Press <strong>SPACE</strong> or <strong>CLICK</strong> to Jump</div>
     <canvas id="gameCanvas" width="320" height="480"></canvas>
 
@@ -26,14 +35,34 @@
         window.onload = function() {
             const canvas = document.getElementById("gameCanvas");
             const ctx = canvas.getContext("2d");
+            const highScoreDisplay = document.getElementById("highScoreDisplay");
 
-            // --- ROBUST SOUND MANAGER SETUP ---
+            // --- LOCAL STORAGE FUNCTIONS ---
+            function getHighScore() {
+                // Get the stored high score, or 0 if none is found
+                return parseInt(localStorage.getItem('meggerHighScore') || '0', 10);
+            }
+
+            function setHighScore(newScore) {
+                // Only save the score if it's greater than the current high score
+                if (newScore > getHighScore()) {
+                    localStorage.setItem('meggerHighScore', newScore);
+                    updateHighScoreDisplay(newScore); // Update the display immediately
+                }
+            }
+
+            function updateHighScoreDisplay(score) {
+                highScoreDisplay.textContent = "High Score: " + score;
+            }
+            
+            // Initialize high score display on load
+            updateHighScoreDisplay(getHighScore());
+            
+            // --- ROBUST SOUND MANAGER SETUP (unchanged) ---
             let audioContext;
             let audioUnlocked = false;
-
-            // Using the exact file names provided by the user
-            const hitSound = new Audio('hit.mp3.mp3'); // CRASH SOUND
-            const flapSound = new Audio('flap.mp3');   // JUMP SOUND (Requires 'flap.mp3' file)
+            const hitSound = new Audio('hit.mp3.mp3'); 
+            const flapSound = new Audio('flap.mp3'); 
 
             function playSound(audioElement) {
                 if (audioContext && audioContext.state === 'suspended') {
@@ -50,7 +79,7 @@
             // Game Variables
             let frames = 0; let score = 0; let gameState = "START"; 
             
-            // The "Megger" Entity
+            // The "Megger" Entity (unchanged)
             const bird = {
                 x: 50, y: 150, velocity: 0, gravity: 0.25, jump: 4.6,
                 width: 90, height: 24, 
@@ -62,7 +91,7 @@
                 
                 update: function() {
                     this.velocity += this.gravity; this.y += this.velocity;
-                    // Floor Collision
+                    // Floor Collision - CALL gameOver()
                     if (this.y + this.height >= canvas.height - 20) {
                         this.y = canvas.height - 20 - this.height; gameOver();
                     }
@@ -97,7 +126,7 @@
                     }
                     for(let i = 0; i < this.items.length; i++){
                         let p = this.items[i]; p.x -= this.dx;
-                        // Collision Logic
+                        // Collision Logic - CALL gameOver()
                         if(bird.x < p.x + this.width && bird.x + bird.width > p.x) {
                             if(bird.y < p.y || bird.y + bird.height > p.y + this.gap) { gameOver(); }
                         }
@@ -108,7 +137,7 @@
                 reset: function() { this.items = []; }
             };
 
-            // Main Draw/Loop Functions (unchanged)
+            // Main Draw/Loop Functions
             function draw() {
                 ctx.fillStyle = "#70c5ce"; ctx.fillRect(0, 0, canvas.width, canvas.height);
                 pipes.draw();
@@ -120,9 +149,28 @@
                 if (gameState === "START") {
                     ctx.fillStyle = "white"; ctx.font = "bold 25px Arial"; ctx.fillText("Click to Start", 80, 200);
                 } else if (gameState === "GAMEOVER") {
-                    ctx.fillStyle = "black"; ctx.font = "bold 30px Arial"; ctx.fillText("Game Over", 80, 180);
+                    const highScore = getHighScore();
+                    const newHighScore = score > highScore;
+                    
+                    ctx.fillStyle = "black"; ctx.font = "bold 30px Arial"; ctx.fillText("Game Over", 80, 150);
+                    
+                    // Display Current Score
                     ctx.fillStyle = "white"; ctx.font = "bold 20px Arial";
-                    ctx.fillText("Score: " + score, 115, 220); ctx.fillText("Click to Restart", 85, 260);
+                    ctx.fillText("Score: " + score, 115, 200); 
+
+                    // Display High Score and New High Score message
+                    ctx.font = "bold 20px Arial";
+                    if (newHighScore) {
+                         ctx.fillStyle = "#FFD700"; // Gold for new high score
+                         ctx.fillText("NEW High Score: " + score, 65, 240);
+                    } else {
+                         ctx.fillStyle = "white";
+                         ctx.fillText("Best Score: " + highScore, 95, 240);
+                    }
+                    
+                    ctx.fillStyle = "white"; ctx.font = "bold 20px Arial";
+                    ctx.fillText("Click to Restart", 85, 280);
+                    
                 } else {
                     ctx.fillStyle = "white"; ctx.strokeStyle = "black"; ctx.lineWidth = 1;
                     ctx.font = "bold 35px Arial";
@@ -140,11 +188,12 @@
             function gameOver() {
                 if (gameState !== "GAMEOVER") {
                     gameState = "GAMEOVER";
+                    setHighScore(score); // *** NEW: Save the score on game over ***
                     playSound(hitSound); 
                 }
             }
 
-            // --- INPUT HANDLING WITH AUDIO LOCK ---
+            // --- INPUT HANDLING WITH AUDIO LOCK (unchanged logic) ---
             function handleInput(e) {
                 if(e.type === 'keydown' && e.code === 'Space') { e.preventDefault(); }
 
@@ -162,6 +211,9 @@
                 } else if (gameState === "PLAYING") {
                     bird.flap();
                 } else if (gameState === "GAMEOVER") {
+                    // *** IMPORTANT: Update High Score display on restart to ensure it's current ***
+                    updateHighScoreDisplay(getHighScore()); 
+                    
                     bird.reset(); pipes.reset(); score = 0; frames = 0; gameState = "START";
                 }
             }

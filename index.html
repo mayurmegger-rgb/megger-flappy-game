@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Megger Flappy Game (Final Audio)</title>
+    <title>Megger Flappy Game (High Score)</title>
     <style>
         body {
             margin: 0; padding: 0; display: flex; flex-direction: column; justify-content: center;
@@ -27,14 +27,15 @@
             const canvas = document.getElementById("gameCanvas");
             const ctx = canvas.getContext("2d");
 
-            // --- ROBUST SOUND MANAGER SETUP ---
+            // --- LOCAL STORAGE KEY ---
+            const HIGH_SCORE_KEY = "meggerFlappyHighScore"; 
+
+            // --- AUDIO SETUP ---
             let audioContext;
             let audioUnlocked = false;
-
-            // Audio Files (UPDATED WITH NEW FILENAMES)
             const hitSound = new Audio('hit.mp3.mp3'); 
-            const flapSound = new Audio('Swoosh.mp3.mp3');   // <--- SWOOSH SOUND
-            const scoreSound = new Audio('Points.mp3.mp3'); // <--- POINTS SOUND
+            const flapSound = new Audio('Swoosh.mp3.mp3');   
+            const scoreSound = new Audio('Points.mp3.mp3'); 
 
             function playSound(audioElement) {
                 if (audioContext && audioContext.state === 'suspended') {
@@ -49,18 +50,19 @@
             }
 
             // Game Variables
-            let frames = 0; let score = 0; let gameState = "START"; 
+            let frames = 0; 
+            let score = 0; 
+            let highScore = parseInt(localStorage.getItem(HIGH_SCORE_KEY)) || 0; // Load High Score
+            let gameState = "START"; 
             
-            // The "Megger" Entity
+            // The "Megger" Entity (unchanged)
             const bird = {
                 x: 50, y: 150, velocity: 0, gravity: 0.25, jump: 4.6,
                 width: 90, height: 24, 
-                
                 draw: function() {
                     ctx.fillStyle = "red"; ctx.font = "bold 24px Arial";
                     ctx.textBaseline = "top"; ctx.fillText("Megger", this.x, this.y);
                 },
-                
                 update: function() {
                     this.velocity += this.gravity; this.y += this.velocity;
                     if (this.y + this.height >= canvas.height - 20) {
@@ -68,19 +70,16 @@
                     }
                     if (this.y < 0) { this.y = 0; this.velocity = 0; }
                 },
-                
                 flap: function() { 
                     this.velocity = -this.jump; 
-                    playSound(flapSound); // Play SWOOSH sound on flap
+                    playSound(flapSound); 
                 },
-                
                 reset: function() { this.y = 150; this.velocity = 0; }
             };
 
-            // Pipes
+            // Pipes (Score update modified)
             const pipes = {
                 items: [], width: 52, gap: 120, dx: 2,
-
                 draw: function() {
                     for(let i = 0; i < this.items.length; i++){
                         let p = this.items[i]; ctx.fillStyle = "#228B22";
@@ -103,11 +102,11 @@
                             if(bird.y < p.y || bird.y + bird.height > p.y + this.gap) { gameOver(); }
                         }
 
-                        // Score update (when pipe passes the bird)
+                        // Score update
                         if(p.x + this.width <= 0 && !p.passed) { 
                             score++;
                             p.passed = true;
-                            playSound(scoreSound); // <--- PLAY POINTS SOUND HERE
+                            playSound(scoreSound); 
                         }
                     }
                     this.items = this.items.filter(p => p.x + this.width > 0);
@@ -115,71 +114,10 @@
                 reset: function() { this.items = []; }
             };
 
-            // Main Draw/Loop Functions (omitted for brevity, unchanged)
+            // Draw Function (MODIFIED TO DISPLAY HIGH SCORE)
             function draw() {
                 ctx.fillStyle = "#70c5ce"; ctx.fillRect(0, 0, canvas.width, canvas.height);
                 pipes.draw();
                 ctx.fillStyle = "#ded895"; ctx.fillRect(0, canvas.height - 20, canvas.width, 20);
                 ctx.beginPath(); ctx.moveTo(0, canvas.height - 20); ctx.lineTo(canvas.width, canvas.height - 20);
-                ctx.strokeStyle = "#000"; ctx.stroke();
-                bird.draw();
-
-                if (gameState === "START") {
-                    ctx.fillStyle = "white"; ctx.font = "bold 25px Arial"; ctx.fillText("Click to Start", 80, 200);
-                } else if (gameState === "GAMEOVER") {
-                    ctx.fillStyle = "black"; ctx.font = "bold 30px Arial"; ctx.fillText("Game Over", 80, 180);
-                    ctx.fillStyle = "white"; ctx.font = "bold 20px Arial";
-                    ctx.fillText("Score: " + score, 115, 220); ctx.fillText("Click to Restart", 85, 260);
-                } else {
-                    ctx.fillStyle = "white"; ctx.strokeStyle = "black"; ctx.lineWidth = 1;
-                    ctx.font = "bold 35px Arial";
-                    ctx.fillText(score, 150, 50); ctx.strokeText(score, 150, 50);
-                }
-            }
-
-            function loop() {
-                if (gameState === "PLAYING") {
-                    bird.update(); pipes.update(); frames++;
-                }
-                draw(); requestAnimationFrame(loop);
-            }
-
-            function gameOver() {
-                if (gameState !== "GAMEOVER") {
-                    gameState = "GAMEOVER";
-                    playSound(hitSound); 
-                }
-            }
-
-            // --- INPUT HANDLING WITH AUDIO LOCK ---
-            function handleInput(e) {
-                if(e.type === 'keydown' && e.code === 'Space') { e.preventDefault(); }
-
-                // 1. First interaction to UNLOCK audio
-                if (!audioUnlocked) {
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    audioContext.resume().then(() => {
-                        audioUnlocked = true;
-                    }).catch(e => console.error("Audio unlock failed:", e));
-                }
-
-                // 2. Game Logic
-                if (gameState === "START") {
-                    gameState = "PLAYING"; bird.flap();
-                } else if (gameState === "PLAYING") {
-                    bird.flap();
-                } else if (gameState === "GAMEOVER") {
-                    bird.reset(); pipes.reset(); score = 0; frames = 0; gameState = "START";
-                }
-            }
-
-            // Listeners
-            window.addEventListener("keydown", function(e){ if(e.code === "Space") handleInput(e); });
-            window.addEventListener("mousedown", handleInput);
-            window.addEventListener("touchstart", function(e){ e.preventDefault(); handleInput(e); }, {passive: false});
-
-            loop();
-        };
-    </script>
-</body>
-</html>
+                ctx.strokeStyle = "#000"; ctx
